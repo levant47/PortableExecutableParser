@@ -1,0 +1,6 @@
+.vs
+*.exe
+*.obj
+*.pdb
+*.ilk
+!hello.exe
