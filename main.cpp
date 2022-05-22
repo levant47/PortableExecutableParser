@@ -2,8 +2,6 @@
 
 #pragma pack(push, 1)
 
-void __chkstk() { }
-
 struct PeParser
 {
     u64 index;
@@ -199,9 +197,9 @@ enum PeCharacteristic : u16
 String to_string(PeCharacteristic characteristic)
 {
     auto result = String::allocate();
-    for (u64 i = 0; i < sizeof(PeCharacteristic) * 8; i++)
+    for (u16 i = 0; i < sizeof(PeCharacteristic) * 8; i++)
     {
-        u64 bit = 1 << i;
+        u16 bit = 1 << i;
         if ((characteristic & bit) != 0)
         {
             if (bit == PeCharacteristic_RELOCS_STRIPPED) { result.push("RELOCS_STRIPPED | "); }
@@ -222,7 +220,7 @@ String to_string(PeCharacteristic characteristic)
             else // it's some other bit that is set, better report it
             {
                 result.push("UNKNOWN_BIT_");
-                result.push(i);
+                result.push((u64)i);
                 result.push(" | ");
             }
         }
@@ -252,22 +250,21 @@ struct CoffHeader
 String to_string(CoffHeader source)
 {
     auto result = String::allocate();
-    result.push("COFF header\n");
-    result.push("\tmachine = ");
+    result.push("machine = ");
     auto machine_string = to_string(source.machine);
     result.push(machine_string);
     machine_string.deallocate();
-    result.push("\n\tsections_count = ");
+    result.push("\nsections_count = ");
     result.push((u64)source.sections_count);
-    result.push("\n\ttimestamp = ");
+    result.push("\ntimestamp = ");
     result.push((u64)source.timestamp);
-    result.push("\n\tsymbol_table_offset = 0x");
+    result.push("\nsymbol_table_offset = 0x");
     result.push((u64)source.symbol_table_offset, 16);
-    result.push("\n\tsymbols_count = ");
+    result.push("\nsymbols_count = ");
     result.push((u64)source.symbols_count);
-    result.push("\n\toptional_header_size = 0x");
+    result.push("\noptional_header_size = 0x");
     result.push((u64)source.optional_header_size, 16);
-    result.push("\n\tcharacteristics = ");
+    result.push("\ncharacteristics = ");
     auto characteristics_string = to_string(source.characteristics);
     result.push(characteristics_string);
     characteristics_string.deallocate();
@@ -404,7 +401,7 @@ enum DllCharacteristic : u16
 String to_string(DllCharacteristic characteristics)
 {
     auto result = String::allocate();
-    for (u64 i = 0; i < sizeof(DllCharacteristic) * 8; i++)
+    for (u16 i = 0; i < sizeof(DllCharacteristic) * 8; i++)
     {
         auto bit = 1 << i;
         if ((characteristics & bit) != 0)
@@ -423,7 +420,7 @@ String to_string(DllCharacteristic characteristics)
             else // it's some unknown bit that is set, better report it
             {
                 result.push("UNKNOWN_BIT_");
-                result.push(i);
+                result.push((u64)i);
                 result.push(" | ");
             }
         }
@@ -477,73 +474,71 @@ String to_string(CoffFields fields)
 {
     auto result = String::allocate();
 
-    result.push("COFF fields:\n");
-    result.push("\tmagic = ");
+    result.push("magic = ");
     auto magic_string = to_string(fields.magic);
     result.push(magic_string);
     magic_string.deallocate();
-    result.push("\n\tmajor_linker_version = ");
+    result.push("\nmajor_linker_version = ");
     result.push((u64)fields.major_linker_version);
-    result.push("\n\tminor_linker_version = ");
+    result.push("\nminor_linker_version = ");
     result.push((u64)fields.minor_linker_version);
-    result.push("\n\tcode_size = ");
+    result.push("\ncode_size = ");
     result.push((u64)fields.code_size);
-    result.push("\n\tinitialized_data_size = ");
+    result.push("\ninitialized_data_size = ");
     result.push((u64)fields.initialized_data_size);
-    result.push("\n\tuninitialized_data_size = ");
+    result.push("\nuninitialized_data_size = ");
     result.push((u64)fields.uninitialized_data_size);
-    result.push("\n\tentry_point = ");
+    result.push("\nentry_point = ");
     result.push((u64)fields.entry_point);
-    result.push("\n\tcode_offset = ");
+    result.push("\ncode_offset = ");
     result.push((u64)fields.code_offset);
-    result.push("\n\timage_base = 0x");
+    result.push("\nimage_base = 0x");
     result.push((u64)fields.image_base, 16);
-    result.push("\n\tsection_alignment = ");
+    result.push("\nsection_alignment = ");
     result.push((u64)fields.section_alignment);
-    result.push("\n\tfile_alignment = ");
+    result.push("\nfile_alignment = ");
     result.push((u64)fields.file_alignment);
-    result.push("\n\tmajor_os_version = ");
+    result.push("\nmajor_os_version = ");
     result.push((u64)fields.major_os_version);
-    result.push("\n\tminor_os_version = ");
+    result.push("\nminor_os_version = ");
     result.push((u64)fields.minor_os_version);
-    result.push("\n\tmajor_image_version = ");
+    result.push("\nmajor_image_version = ");
     result.push((u64)fields.major_image_version);
-    result.push("\n\tminor_image_version = ");
+    result.push("\nminor_image_version = ");
     result.push((u64)fields.minor_image_version);
-    result.push("\n\tmajor_subsystem_version = ");
+    result.push("\nmajor_subsystem_version = ");
     result.push((u64)fields.major_subsystem_version);
-    result.push("\n\tminor_subsystem_version = ");
+    result.push("\nminor_subsystem_version = ");
     result.push((u64)fields.minor_subsystem_version);
-    result.push("\n\twin32_version = ");
+    result.push("\nwin32_version = ");
     result.push((u64)fields.win32_version);
-    result.push("\n\timage_size = ");
+    result.push("\nimage_size = ");
     result.push((u64)fields.image_size);
-    result.push("\n\theaders_size = ");
+    result.push("\nheaders_size = ");
     result.push((u64)fields.headers_size);
-    result.push("\n\tchecksum = ");
+    result.push("\nchecksum = ");
     result.push((u64)fields.checksum);
-    result.push("\n\tsubsystem = ");
+    result.push("\nsubsystem = ");
     auto subsystem_string = to_string(fields.subsystem);
     result.push(subsystem_string);
     subsystem_string.deallocate();
-    result.push("\n\tdll_characteristics = ");
+    result.push("\ndll_characteristics = ");
     auto dll_characteristics_string = to_string(fields.dll_characteristics);
     result.push(dll_characteristics_string);
     dll_characteristics_string.deallocate();
-    result.push("\n\tstack_reserve_size = ");
+    result.push("\nstack_reserve_size = ");
     result.push((u64)fields.stack_reserve_size);
-    result.push("\n\tstack_commit_size = ");
+    result.push("\nstack_commit_size = ");
     result.push((u64)fields.stack_commit_size);
-    result.push("\n\theap_reserve_size = ");
+    result.push("\nheap_reserve_size = ");
     result.push((u64)fields.heap_reserve_size);
-    result.push("\n\theap_commit_size = ");
+    result.push("\nheap_commit_size = ");
     result.push((u64)fields.heap_commit_size);
-    result.push("\n\tloader_flags = ");
+    result.push("\nloader_flags = ");
     result.push((u64)fields.loader_flags);
-    result.push("\n\trva_and_sizes_count = ");
+    result.push("\nrva_and_sizes_count = ");
     result.push((u64)fields.rva_and_sizes_count);
     result.push("\n");
-
     return result;
 }
 
@@ -615,64 +610,63 @@ struct PeDataDirectories
 String to_string(PeDataDirectories data_directories)
 {
     auto result = String::allocate();
-    result.push("Data directories:");
-    result.push("\n\texport_table: address = 0x");
+    result.push("export_table: address = 0x");
     result.push((u64)data_directories.export_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.export_table.size, 16);
-    result.push("\n\timport_table: address = 0x");
+    result.push("\nimport_table: address = 0x");
     result.push((u64)data_directories.import_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.import_table.size, 16);
-    result.push("\n\tresource_table: address = 0x");
+    result.push("\nresource_table: address = 0x");
     result.push((u64)data_directories.resource_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.resource_table.size, 16);
-    result.push("\n\texception_table: address = 0x");
+    result.push("\nexception_table: address = 0x");
     result.push((u64)data_directories.exception_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.exception_table.size, 16);
-    result.push("\n\tcertificate_table: address = 0x");
+    result.push("\ncertificate_table: address = 0x");
     result.push((u64)data_directories.certificate_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.certificate_table.size, 16);
-    result.push("\n\tbase_relocation_table: address = 0x");
+    result.push("\nbase_relocation_table: address = 0x");
     result.push((u64)data_directories.base_relocation_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.base_relocation_table.size, 16);
-    result.push("\n\tdebug: address = 0x");
+    result.push("\ndebug: address = 0x");
     result.push((u64)data_directories.debug.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.debug.size, 16);
-    result.push("\n\tarchitecture: address = 0x");
+    result.push("\narchitecture: address = 0x");
     result.push((u64)data_directories.architecture.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.architecture.size, 16);
-    result.push("\n\tglobal_ptr: address = 0x");
+    result.push("\nglobal_ptr: address = 0x");
     result.push((u64)data_directories.global_ptr.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.global_ptr.size, 16);
-    result.push("\n\ttls_table: address = 0x");
+    result.push("\ntls_table: address = 0x");
     result.push((u64)data_directories.tls_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.tls_table.size, 16);
-    result.push("\n\tload_config_table: address = 0x");
+    result.push("\nload_config_table: address = 0x");
     result.push((u64)data_directories.load_config_table.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.load_config_table.size, 16);
-    result.push("\n\tbound_import: address = 0x");
+    result.push("\nbound_import: address = 0x");
     result.push((u64)data_directories.bound_import.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.bound_import.size, 16);
-    result.push("\n\tiat: address = 0x");
+    result.push("\niat: address = 0x");
     result.push((u64)data_directories.iat.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.iat.size, 16);
-    result.push("\n\tdelay_import_descriptor: address = 0x");
+    result.push("\ndelay_import_descriptor: address = 0x");
     result.push((u64)data_directories.delay_import_descriptor.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.delay_import_descriptor.size, 16);
-    result.push("\n\tclr_runtime_header: address = 0x");
+    result.push("\nclr_runtime_header: address = 0x");
     result.push((u64)data_directories.clr_runtime_header.address, 16);
     result.push(", size = 0x");
     result.push((u64)data_directories.clr_runtime_header.size, 16);
@@ -749,9 +743,9 @@ enum PeSectionFlag : u32
 String to_string(PeSectionFlag characteristic)
 {
     auto result = String::allocate();
-    for (u64 i = 0; i < sizeof(PeSectionFlag) * 8; i++)
+    for (u32 i = 0; i < sizeof(PeSectionFlag) * 8; i++)
     {
-        u64 bit = 1 << i;
+        auto bit = 1 << i;
         if ((characteristic & bit) != 0)
         {
             if (bit == PeSectionFlag_TYPE_NO_PAD) { result.push("TYPE_NO_PAD | "); }
@@ -792,7 +786,7 @@ String to_string(PeSectionFlag characteristic)
             else // unknown bit set, better report it
             {
                 result.push("UNKNOWN_BIT_");
-                result.push(i);
+                result.push((u64)i);
                 result.push(" | ");
             }
         }
@@ -822,9 +816,58 @@ struct PeSectionHeader
     PeSectionFlag characteristics;
 };
 
+String to_string(PeSectionHeader header)
+{
+    auto result = String::allocate();
+    result.push("name: ");
+    for (u64 i = 0; i < sizeof(header.name); i++)
+    {
+        if (header.name[i] != 0)
+        {
+            result.push(header.name[i]);
+        }
+    }
+    result.push("\nvirtual_size: 0x");
+    result.push((u64)header.virtual_size, 16);
+    result.push("\nvirtual_address: 0x");
+    result.push((u64)header.virtual_address, 16);
+    result.push("\nraw_data_size: 0x");
+    result.push((u64)header.raw_data_size, 16);
+    result.push("\nraw_data_pointer: 0x");
+    result.push((u64)header.raw_data_pointer, 16);
+    result.push("\nrelocations_pointer: 0x");
+    result.push((u64)header.relocations_pointer, 16);
+    result.push("\nline_numbers_pointer: 0x");
+    result.push((u64)header.line_numbers_pointer, 16);
+    result.push("\nrelocations_count: ");
+    result.push((u64)header.relocations_count);
+    result.push("\nline_numbers_count: ");
+    result.push((u64)header.line_numbers_count);
+    result.push("\ncharacteristics: ");
+    auto characteristics_string = to_string(header.characteristics);
+    result.push(characteristics_string);
+    characteristics_string.deallocate();
+    result.push("\n");
+    return result;
+}
+
 Result<PeSectionHeader, String> parse_section_header(PeParser* parser)
 {
-    return Result<PeSectionHeader, String>::fail(String::copy_from_c_string("Parsing section table is not implemented yet!"));
+    if (parser->source.size < parser->index + sizeof(PeSectionHeader))
+    {
+        auto error = String::allocate();
+        error.push("Not enough space for a section header, expected file size to be at least ");
+        error.push(parser->index + sizeof(PeSectionHeader));
+        error.push(" bytes long, actual file size: ");
+        error.push(parser->source.size);
+        error.push(" bytes");
+        return Result<PeSectionHeader, String>::fail(error);
+    }
+
+    PeSectionHeader header;
+    copy_memory(parser->source.data + parser->index, sizeof(header), &header);
+    parser->index += sizeof(PeSectionHeader);
+    return Result<PeSectionHeader, String>::success(header);
 }
 
 struct PortableExecutable
@@ -838,42 +881,60 @@ struct PortableExecutable
 String to_string(PortableExecutable* pe)
 {
     auto result = String::allocate();
-    result.push("Portable executable:\n\t");
 
+    result.push("COFF header:\n");
     auto coff_header_string = to_string(pe->coff_header);
     for (u64 i = 0; i < coff_header_string.size; i++)
     {
-        result.push(coff_header_string.data[i]);
-        if (coff_header_string.data[i] == '\n')
+        if (i == 0 || coff_header_string.data[i-1] == '\n')
         {
             result.push('\t');
         }
+        result.push(coff_header_string.data[i]);
     }
     coff_header_string.deallocate();
 
+    result.push("COFF fields:\n");
     auto coff_fields_string = to_string(pe->coff_fields);
     for (u64 i = 0; i < coff_fields_string.size; i++)
     {
-        result.push(coff_fields_string.data[i]);
-        if (coff_fields_string.data[i] == '\n')
+        if (i == 0 || coff_fields_string.data[i-1] == '\n')
         {
             result.push('\t');
         }
+        result.push(coff_fields_string.data[i]);
     }
     coff_fields_string.deallocate();
 
+    result.push("Data directories:\n");
     auto data_directories_string = to_string(pe->data_directories);
     for (u64 i = 0; i < data_directories_string.size; i++)
     {
-        result.push(data_directories_string.data[i]);
-        if (data_directories_string.data[i] == '\n' && i != data_directories_string.size - 1)
+        if (i == 0 || data_directories_string.data[i-1] == '\n')
         {
             result.push('\t');
         }
+        result.push(data_directories_string.data[i]);
     }
     data_directories_string.deallocate();
 
-    // TODO: show section headers
+    result.push("Section headers:\n");
+    for (u64 section_i = 0; section_i < pe->coff_header.sections_count; section_i++)
+    {
+        result.push('\t');
+        result.push(section_i);
+        result.push(":\n");
+        auto section_header_string = to_string(pe->section_headers.data[section_i]);
+        for (u64 i = 0; i < section_header_string.size; i++)
+        {
+            if (i == 0 || section_header_string.data[i-1] == '\n')
+            {
+                result.push("\t\t");
+            }
+            result.push(section_header_string.data[i]);
+        }
+        section_header_string.deallocate();
+    }
 
     return result;
 }
