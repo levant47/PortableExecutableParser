@@ -16,21 +16,21 @@ PeParser construct_pe_parser(ListView<byte> source)
     return result;
 }
 
-Option<String> parse_dos_header(PeParser* parser)
+Result<u64, String> parse_dos_header(PeParser* parser)
 {
     if (parser->index != 0)
     {
         auto error = String::allocate();
         error.push("Expected DOS header at location 0, not 0x");
         error.push(parser->index, 16);
-        return Option<String>::construct(error);
+        return Result<u64, String>::fail(error);
     }
     if (parser->source.size < 0x40)
     {
         auto error = String::allocate();
         error.push("Expected DOS header to be at least 0x40, actual size 0x");
         error.push(parser->source.size, 16);
-        return Option<String>::construct(error);
+        return Result<u64, String>::fail(error);
     }
 
     // check the signature
@@ -45,25 +45,25 @@ Option<String> parse_dos_header(PeParser* parser)
         error.push(", 0x");
         error.push((u64)parser->source.data[1], 16);
         error.push(")");
-        return Option<String>::construct(error);
+        return Result<u64, String>::fail(error);
     }
 
     auto pe_header_offset = *(u32*)(parser->source.data + 0x3c);
-    if (pe_header_offset != 0xc0)
-    {
-        auto error = String::allocate();
-        error.push("Expected PE header offset to be equal to 0xc0, actual value: 0x");
-        error.push((u64)pe_header_offset, 16);
-        return Option<String>::construct(error);
-    }
+    // if (pe_header_offset != 0xc0 && pe_header_offset != 0xa8)
+    // {
+    //     auto error = String::allocate();
+    //     error.push("Expected PE header offset to be equal to 0xc0 or 0xa8, actual value: 0x");
+    //     error.push((u64)pe_header_offset, 16);
+    //     return Result<u64, String>::fail(error);
+    // }
 
     parser->index = 0x40;
-    return Option<String>::empty();
+    return Result<u64, String>::success(pe_header_offset);
 }
 
-Option<String> parse_dos_stub(PeParser* parser)
+Option<String> parse_dos_stub(PeParser* parser, u64 pe_header_start)
 {
-    if (parser->index != 0x40 || parser->source.size < 0xc0)
+    if (parser->index != 0x40 || parser->source.size < pe_header_start)
     {
         auto error = String::allocate();
         error.push("Expected DOS stub to be located at byte 0x40 and to be at least of size 0xc0, actual location: 0x");
@@ -73,31 +73,7 @@ Option<String> parse_dos_stub(PeParser* parser)
         return Option<String>::construct(error);
     }
 
-    char stub_message[] = "This program cannot be run in DOS mode.\r\r\n";
-    for (u64 i = 0; i < ARRAY_SIZE(stub_message) - 1 /* null terminator */; i++)
-    {
-        if (parser->source.data[parser->index + 14 + i] != stub_message[i])
-        {
-            auto error = String::allocate();
-            error.push("Expected to find the follwing message at location 0x");
-            error.push(parser->index + 14, 16);
-            error.push(":\n\"");
-            error.push((CString)stub_message);
-            error.push("\"\ninstead got\n\"");
-            error.push(StringView::construct(ARRAY_SIZE(stub_message), (char*)(parser->source.data + parser->index + 14)));
-            error.push("\"\n(differing at position ");
-            error.push(i + 1);
-            error.push("/");
-            error.push(ARRAY_SIZE(stub_message) - 1);
-            error.push(", expected = 0x");
-            error.push((u64)stub_message[i], 16);
-            error.push(", got = 0x");
-            error.push((u64)parser->source.data[parser->index + 14 + i], 16);
-            error.push(")");
-            return Option<String>::construct(error);
-        }
-    }
-    parser->index = 0xc0;
+    parser->index = pe_header_start;
     return Option<String>::empty();
 }
 
@@ -274,11 +250,11 @@ String to_string(CoffHeader source)
 
 Result<CoffHeader, String> parse_coff_header(PeParser* parser)
 {
-    if (parser->index != 0xc0 || parser->source.size < parser->index + 20)
+    if (parser->source.size < parser->index + 20)
     {
         auto error = String::allocate();
-        error.push("Expected COFF header to be located at byte 0xc0 and the whole file to be at least of size 0xc0 + 20, actual location: 0x");
-        error.push(parser->index, 16);
+        error.push("Not enough space for COFF header, expected the whole file to be at least of size 0x");
+        error.push(parser->index + 20, 16);
         error.push(", actual size: 0x");
         error.push(parser->source.size, 16);
         return Result<CoffHeader, String>::fail(error);
@@ -544,13 +520,6 @@ String to_string(CoffFields fields)
 
 Result<CoffFields, String> parse_coff_fields(PeParser* parser)
 {
-    if (parser->index != 0xd8)
-    {
-        auto error = String::allocate();
-        error.push("Expected COFF fields to start at byte 0xb8, actual location: 0x");
-        error.push(parser->index, 16);
-        return Result<CoffFields, String>::fail(error);
-    }
     if (parser->source.size < parser->index + sizeof(CoffFields))
     {
         auto error = String::allocate();
@@ -610,65 +579,65 @@ struct PeDataDirectories
 String to_string(PeDataDirectories data_directories)
 {
     auto result = String::allocate();
-    result.push("export_table: address = 0x");
+    result.push("export_table:\n\taddress = 0x");
     result.push((u64)data_directories.export_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.export_table.size, 16);
-    result.push("\nimport_table: address = 0x");
+    result.push("\nimport_table:\n\taddress = 0x");
     result.push((u64)data_directories.import_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.import_table.size, 16);
-    result.push("\nresource_table: address = 0x");
+    result.push("\nresource_table:\n\taddress = 0x");
     result.push((u64)data_directories.resource_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.resource_table.size, 16);
-    result.push("\nexception_table: address = 0x");
+    result.push("\nexception_table:\n\taddress = 0x");
     result.push((u64)data_directories.exception_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.exception_table.size, 16);
-    result.push("\ncertificate_table: address = 0x");
+    result.push("\ncertificate_table:\n\taddress = 0x");
     result.push((u64)data_directories.certificate_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.certificate_table.size, 16);
-    result.push("\nbase_relocation_table: address = 0x");
+    result.push("\nbase_relocation_table:\n\taddress = 0x");
     result.push((u64)data_directories.base_relocation_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.base_relocation_table.size, 16);
-    result.push("\ndebug: address = 0x");
+    result.push("\ndebug:\n\taddress = 0x");
     result.push((u64)data_directories.debug.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.debug.size, 16);
-    result.push("\narchitecture: address = 0x");
+    result.push("\narchitecture:\n\taddress = 0x");
     result.push((u64)data_directories.architecture.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.architecture.size, 16);
-    result.push("\nglobal_ptr: address = 0x");
+    result.push("\nglobal_ptr:\n\taddress = 0x");
     result.push((u64)data_directories.global_ptr.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.global_ptr.size, 16);
-    result.push("\ntls_table: address = 0x");
+    result.push("\ntls_table:\n\taddress = 0x");
     result.push((u64)data_directories.tls_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.tls_table.size, 16);
-    result.push("\nload_config_table: address = 0x");
+    result.push("\nload_config_table:\n\taddress = 0x");
     result.push((u64)data_directories.load_config_table.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.load_config_table.size, 16);
-    result.push("\nbound_import: address = 0x");
+    result.push("\nbound_import:\n\taddress = 0x");
     result.push((u64)data_directories.bound_import.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.bound_import.size, 16);
-    result.push("\niat: address = 0x");
+    result.push("\niat:\n\taddress = 0x");
     result.push((u64)data_directories.iat.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.iat.size, 16);
-    result.push("\ndelay_import_descriptor: address = 0x");
+    result.push("\ndelay_import_descriptor:\n\taddress = 0x");
     result.push((u64)data_directories.delay_import_descriptor.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.delay_import_descriptor.size, 16);
-    result.push("\nclr_runtime_header: address = 0x");
+    result.push("\nclr_runtime_header:\n\taddress = 0x");
     result.push((u64)data_directories.clr_runtime_header.address, 16);
-    result.push(", size = 0x");
+    result.push("\n\tsize = 0x");
     result.push((u64)data_directories.clr_runtime_header.size, 16);
     result.push("\n");
     return result;
@@ -676,13 +645,6 @@ String to_string(PeDataDirectories data_directories)
 
 Result<PeDataDirectories, String> parse_data_directories(PeParser* parser)
 {
-    if (parser->index != 0x148)
-    {
-        auto error = String::allocate();
-        error.push("Expected data directories to start at byte 0x148, not at 0x");
-        error.push(parser->index, 16);
-        return Result<PeDataDirectories, String>::fail(error);
-    }
     if (parser->source.size < parser->index + sizeof(PeDataDirectories))
     {
         auto error = String::allocate();
@@ -816,8 +778,15 @@ struct PeSectionHeader
     PeSectionFlag characteristics;
 };
 
-String to_string(PeSectionHeader header)
+struct PeSection
 {
+    PeSectionHeader header;
+    byte* data;
+};
+
+String to_string(PeSection section)
+{
+    auto header = section.header;
     auto result = String::allocate();
     result.push("name: ");
     for (u64 i = 0; i < sizeof(header.name); i++)
@@ -851,7 +820,7 @@ String to_string(PeSectionHeader header)
     return result;
 }
 
-Result<PeSectionHeader, String> parse_section_header(PeParser* parser)
+Result<PeSection, String> parse_section(PeParser* parser)
 {
     if (parser->source.size < parser->index + sizeof(PeSectionHeader))
     {
@@ -861,34 +830,42 @@ Result<PeSectionHeader, String> parse_section_header(PeParser* parser)
         error.push(" bytes long, actual file size: ");
         error.push(parser->source.size);
         error.push(" bytes");
-        return Result<PeSectionHeader, String>::fail(error);
+        return Result<PeSection, String>::fail(error);
     }
 
-    PeSectionHeader header;
-    copy_memory(parser->source.data + parser->index, sizeof(header), &header);
+    PeSection section;
+    copy_memory(parser->source.data + parser->index, sizeof(PeSectionHeader), &section.header);
     parser->index += sizeof(PeSectionHeader);
-    return Result<PeSectionHeader, String>::success(header);
+
+    section.data = default_allocate(section.header.raw_data_size);
+    copy_memory(parser->source.data + section.header.raw_data_pointer, section.header.raw_data_size, section.data);
+
+    return Result<PeSection, String>::success(section);
 }
 
 struct PortableExecutable
 {
+    u64 pe_header_start;
     CoffHeader coff_header;
     CoffFields coff_fields;
     PeDataDirectories data_directories;
-    List<PeSectionHeader> section_headers;
+    List<PeSection> sections;
 };
 
 String to_string(PortableExecutable* pe)
 {
     auto result = String::allocate();
 
-    result.push("COFF header:\n");
+    result.push("PE header start: 0x");
+    result.push(pe->pe_header_start, 16);
+
+    result.push("\nCOFF header:\n");
     auto coff_header_string = to_string(pe->coff_header);
     for (u64 i = 0; i < coff_header_string.size; i++)
     {
         if (i == 0 || coff_header_string.data[i-1] == '\n')
         {
-            result.push('\t');
+            result.push("    ");
         }
         result.push(coff_header_string.data[i]);
     }
@@ -900,7 +877,7 @@ String to_string(PortableExecutable* pe)
     {
         if (i == 0 || coff_fields_string.data[i-1] == '\n')
         {
-            result.push('\t');
+            result.push("    ");
         }
         result.push(coff_fields_string.data[i]);
     }
@@ -912,7 +889,7 @@ String to_string(PortableExecutable* pe)
     {
         if (i == 0 || data_directories_string.data[i-1] == '\n')
         {
-            result.push('\t');
+            result.push("    ");
         }
         result.push(data_directories_string.data[i]);
     }
@@ -921,19 +898,19 @@ String to_string(PortableExecutable* pe)
     result.push("Section headers:\n");
     for (u64 section_i = 0; section_i < pe->coff_header.sections_count; section_i++)
     {
-        result.push('\t');
+        result.push("    ");
         result.push(section_i);
         result.push(":\n");
-        auto section_header_string = to_string(pe->section_headers.data[section_i]);
-        for (u64 i = 0; i < section_header_string.size; i++)
+        auto section_string = to_string(pe->sections.data[section_i]);
+        for (u64 i = 0; i < section_string.size; i++)
         {
-            if (i == 0 || section_header_string.data[i-1] == '\n')
+            if (i == 0 || section_string.data[i-1] == '\n')
             {
-                result.push("\t\t");
+                result.push("        ");
             }
-            result.push(section_header_string.data[i]);
+            result.push(section_string.data[i]);
         }
-        section_header_string.deallocate();
+        section_string.deallocate();
     }
 
     return result;
@@ -943,9 +920,9 @@ Result<PortableExecutable*, String> parse_pe(ListView<byte> source)
 {
     auto parser = construct_pe_parser(source);
 
-    auto parse_dos_header_error = parse_dos_header(&parser);
-    if (parse_dos_header_error.has_data) { return Result<PortableExecutable*, String>::fail(parse_dos_header_error.value); }
-    auto parse_dos_stub_error = parse_dos_stub(&parser);
+    auto parse_dos_header_result = parse_dos_header(&parser);
+    if (!parse_dos_header_result.is_success) { return Result<PortableExecutable*, String>::fail(parse_dos_header_result.error); }
+    auto parse_dos_stub_error = parse_dos_stub(&parser, parse_dos_header_result.value);
     if (parse_dos_stub_error.has_data) { return Result<PortableExecutable*, String>::fail(parse_dos_stub_error.value); }
     auto parse_coff_header_result = parse_coff_header(&parser);
     if (!parse_coff_header_result.is_success) { return Result<PortableExecutable*, String>::fail(parse_coff_header_result.error); }
@@ -955,20 +932,65 @@ Result<PortableExecutable*, String> parse_pe(ListView<byte> source)
     if (!parse_data_directories_result.is_success) { return Result<PortableExecutable*, String>::fail(parse_data_directories_result.error); }
 
     auto coff_header = parse_coff_header_result.value;
-    auto section_headers = List<PeSectionHeader>::allocate(coff_header.sections_count); // leak in case parsing fails
+    auto sections = List<PeSection>::allocate(coff_header.sections_count); // leak in case parsing fails
     for (u64 i = 0; i < coff_header.sections_count; i++)
     {
-        auto parse_section_header_result = parse_section_header(&parser);
+        auto parse_section_header_result = parse_section(&parser);
         if (!parse_section_header_result.is_success) { return Result<PortableExecutable*, String>::fail(parse_section_header_result.error); }
-        section_headers.push(parse_section_header_result.value);
+        sections.push(parse_section_header_result.value);
     }
 
     auto pe = (PortableExecutable*)default_allocate(sizeof(PortableExecutable));
+    pe->pe_header_start = parse_dos_header_result.value;
     pe->coff_header = parse_coff_header_result.value;
     pe->coff_fields = parse_coff_fields_result.value;
     pe->data_directories = parse_data_directories_result.value;
-    pe->section_headers = section_headers;
+    pe->sections = sections;
+
     return Result<PortableExecutable*, String>::success(pe);
+}
+
+List<byte> to_bytes(PortableExecutable* pe)
+{
+    auto result = List<byte>::allocate();
+
+    // DOS header
+    result.push(ListView<byte>::construct(2, (byte*)"MZ"));
+    for (u64 i = 0; i < 0x40 - 6; i++) { result.push(0); }
+    result.push(ListView<byte>::construct(4, (byte*)&pe->pe_header_start));
+
+    // DOS stub
+    for (u64 i = 0; i < pe->pe_header_start - 0x40; i++) { result.push(0); }
+
+    // COFF header
+    u32 coff_signature = 0x4550;
+    result.push(ListView<byte>::construct(4, (byte*)&coff_signature));
+    result.push(ListView<byte>::construct(sizeof(pe->coff_header), (byte*)&pe->coff_header));
+
+    // COFF fields
+    result.push(ListView<byte>::construct(sizeof(pe->coff_fields), (byte*)&pe->coff_fields));
+
+    // data directories
+    result.push(ListView<byte>::construct(sizeof(pe->data_directories), (byte*)&pe->data_directories));
+
+    // section headers
+    for (u64 i = 0; i < pe->sections.size; i++)
+    {
+        result.push(ListView<byte>::construct(sizeof(PeSectionHeader), (byte*)&pe->sections.data[i].header));
+    }
+
+    // padding
+    while (result.size % 512 != 0) { result.push(0); }
+
+    // sections
+    for (u64 i = 0; i < pe->sections.size; i++)
+    {
+        result.push(ListView<byte>::construct(pe->sections.data[i].header.raw_data_size, pe->sections.data[i].data));
+        // padding
+        while (result.size % 512 != 0) { result.push(0); }
+    }
+
+    return result;
 }
 
 int main()
@@ -1010,6 +1032,36 @@ int main()
     auto pe_string = to_string(pe);
     print(pe_string);
     pe_string.deallocate();
+
+    // output
+    // auto output_file = CreateFile(
+    //     "out_hello.exe",
+    //     GENERIC_WRITE,
+    //     FILE_SHARE_WRITE,
+    //     nullptr,
+    //     CREATE_ALWAYS,
+    //     FILE_ATTRIBUTE_NORMAL,
+    //     nullptr
+    // );
+    // assert_winapi(output_file != INVALID_HANDLE_VALUE, "CreateValue");
+
+    // pe->data_directories.debug.address = 0;
+    // pe->data_directories.debug.size = 0;
+    // pe->sections.pop();
+    // pe->coff_header.sections_count--;
+    // auto output_contents = to_bytes(pe);
+
+    // auto write_file_result = WriteFile(
+    //     output_file,
+    //     output_contents.data,
+    //     output_contents.size,
+    //     nullptr,
+    //     nullptr
+    // );
+    // assert_winapi(write_file_result == TRUE, "WriteFile");
+
+    // CloseHandle(output_file);
+
     default_deallocate(pe);
 
     default_deallocate(target_file_contents.data);
